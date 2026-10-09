@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { generateToken } = require('../jwt');
+const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -99,7 +100,7 @@ router.post('/login', async (req, res) => {
 });
 
 // POST /api/auth/change-password
-router.post('/change-password', async (req, res) => {
+router.post('/change-password', authMiddleware, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
@@ -135,7 +136,7 @@ router.post('/forgot-password', (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', async (req, res) => {
+router.get('/me', authMiddleware, async (req, res) => {
   try {
     const { rows } = await db.query(
       'SELECT id, username, email, is_approved, is_admin, emails_created, last_login, created_at FROM users WHERE id = $1',
