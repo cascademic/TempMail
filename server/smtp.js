@@ -60,7 +60,29 @@ async function saveMessage(recipient, parsed, rawSize) {
     [parseInt(countRows[0].count), tempEmail.id]);
 }
 
+// Domains accepted for incoming mail: MAIL_DOMAIN env + the domain set in app_config
+async function getAcceptedDomains() {
+  const domains = new Set();
+  if (process.env.MAIL_DOMAIN) domains.add(process.env.MAIL_DOMAIN.toLowerCase());
+  const { rows } = await db.query('SELECT email_domain FROM app_config WHERE id = 1');
+  if (rows.length > 0 && rows[0].email_domain) domains.add(rows[0].email_domain.toLowerCase());
+  if (domains.size === 0) domains.add('tempmail.tk');
+  return domains;
+}
+
+// Keep app_config.email_domain (used by the UI and inbox creation) in sync with MAIL_DOMAIN
+async function syncMailDomain() {
+  if (!process.env.MAIL_DOMAIN) return;
+  try {
+    await db.query('UPDATE app_config SET email_domain = $1 WHERE id = 1', [process.env.MAIL_DOMAIN]);
+  } catch (err) {
+    console.error('Failed to sync MAIL_DOMAIN to app_config:', err.message);
+  }
+}
+
 function startSmtpServer() {
+  syncMailDomain();
+
   if (process.env.ENABLE_SMTP === 'false') {
     console.log('SMTP server disabled (ENABLE_SMTP=false)');
     return;
@@ -77,17 +99,17 @@ function startSmtpServer() {
     maxClients: 50,
     banner: mailDomain,
 
-    onRcptTo(session, address, cb) {
+    async onRcptTo(address, session, cb) {
       try {
-        const recipient = address.value
-          ? address.value[0].address.toLowerCase()
-          : String(address).toLowerCase();
+        const recipient = address.address.toLowerCase();
 
         if (session.envelope.rcptTo.length > 5) {
           return cb(new Error('Too many recipients (max 5)'));
         }
 
-        if (!recipient.endsWith(`@${mailDomain}`)) {
+        const domain = recipient.split('@')[1];
+        const acceptedDomains = await getAcceptedDomains();
+        if (!acceptedDomains.has(domain)) {
           const err = new Error('Relay access denied');
           err.responseCode = 550;
           return cb(err);
@@ -124,9 +146,7 @@ function startSmtpServer() {
           const parsed = await simpleParser(rawBuffer);
 
           for (const rcpt of session.envelope.rcptTo) {
-            const recipient = rcpt.value
-              ? rcpt.value[0].address.toLowerCase()
-              : String(rcpt).toLowerCase();
+            const recipient = rcpt.address.toLowerCase();
 
             try {
               await saveMessage(recipient, parsed, rawSize);
