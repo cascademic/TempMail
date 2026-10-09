@@ -9,14 +9,14 @@ import ProfilePage from '@/pages/ProfilePage';
 import Header, { type Page } from '@/components/Header';
 
 function AppContent() {
-  const { session, profile, loading } = useAuth();
+  const { isAuthenticated, profile, loading } = useAuth();
   const [page, setPage] = useState<Page>('dashboard');
 
   if (loading) {
     return <FullPageLoader message="Loading your inbox..." />;
   }
 
-  if (!session || !profile) {
+  if (!isAuthenticated || !profile) {
     return <AuthPage />;
   }
 

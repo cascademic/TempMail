@@ -1,14 +1,12 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { Session } from '@supabase/supabase-js';
-import { supabase } from './supabase';
-import { authApi } from './api';
+import { authApi, setToken, clearToken, getToken } from './api';
 import type { Profile } from './types';
 
 interface AuthContextValue {
-  session: Session | null;
+  isAuthenticated: boolean;
   profile: Profile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (username: string, password: string) => Promise<void>;
   signUp: (username: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -17,33 +15,16 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!getToken());
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      if (!data.session) {
-        setLoading(false);
-      }
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      if (!newSession) {
-        setProfile(null);
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
+    const token = getToken();
+    if (!token) {
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
 
@@ -52,10 +33,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const p = await authApi.getProfile();
         if (!cancelled) {
           setProfile(p);
-          await authApi.updateLastLogin();
+          setIsAuthenticated(true);
         }
-      } catch (err) {
-        console.error('Failed to load profile:', err);
+      } catch {
+        clearToken();
+        if (!cancelled) setIsAuthenticated(false);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -64,10 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [session]);
+  }, []);
 
   const refreshProfile = async () => {
-    if (!session) return;
+    if (!getToken()) return;
     try {
       const p = await authApi.getProfile();
       setProfile(p);
@@ -76,8 +58,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signIn = async (email: string, password: string) => {
-    await authApi.login(email, password);
+  const signIn = async (username: string, password: string) => {
+    const { token } = await authApi.login(username, password);
+    setToken(token);
+    setIsAuthenticated(true);
+    const p = await authApi.getProfile();
+    setProfile(p);
   };
 
   const signUp = async (username: string, email: string, password: string) => {
@@ -85,13 +71,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await authApi.logout();
+    clearToken();
     setProfile(null);
-    setSession(null);
+    setIsAuthenticated(false);
   };
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ isAuthenticated, profile, loading, signIn, signUp, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

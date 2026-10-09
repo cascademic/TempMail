@@ -7,6 +7,7 @@ import { useToast } from '@/lib/toast-context';
 export default function ProfilePage() {
   const { profile, signOut } = useAuth();
   const { showToast } = useToast();
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -15,6 +16,10 @@ export default function ProfilePage() {
   if (!profile) return null;
 
   const handleChangePassword = async () => {
+    if (!currentPassword) {
+      showToast('Enter your current password', 'error');
+      return;
+    }
     if (newPassword.length < 6) {
       showToast('Password must be at least 6 characters', 'error');
       return;
@@ -25,8 +30,9 @@ export default function ProfilePage() {
     }
     setChanging(true);
     try {
-      await authApi.changePassword(newPassword);
+      await authApi.changePassword(currentPassword, newPassword);
       showToast('Password changed successfully', 'success');
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
@@ -87,6 +93,19 @@ export default function ProfilePage() {
           </div>
           <div className="p-5 space-y-4">
             <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1.5">Current Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full pl-10 pr-10 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                />
+              </div>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-slate-600 mb-1.5">New Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -121,7 +140,7 @@ export default function ProfilePage() {
             </div>
             <button
               onClick={handleChangePassword}
-              disabled={changing || !newPassword || !confirmPassword}
+              disabled={changing || !currentPassword || !newPassword || !confirmPassword}
               className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {changing && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}

@@ -1,5 +1,0 @@
-[functions.admin-ops]
-verify_jwt = true
-
-[functions.email-ops]
-verify_jwt = true

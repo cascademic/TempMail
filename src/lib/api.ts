@@ -1,11 +1,20 @@
-import { EDGE_FUNCTIONS_BASE, supabase } from './supabase';
-import type { AppConfig, AdminStats, Profile, InboxEmail, Message, TempEmail } from './types';
+const API_BASE = '/api';
 
-async function callEdgeFunction(name: string, path: string, options: RequestInit = {}) {
-  const { data: session } = await supabase.auth.getSession();
-  const token = session.session?.access_token;
+export function getToken(): string | null {
+  return localStorage.getItem('token');
+}
 
-  const response = await fetch(`${EDGE_FUNCTIONS_BASE}/${name}${path}`, {
+export function setToken(token: string) {
+  localStorage.setItem('token', token);
+}
+
+export function clearToken() {
+  localStorage.removeItem('token');
+}
+
+async function apiCall<T = any>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -23,52 +32,50 @@ async function callEdgeFunction(name: string, path: string, options: RequestInit
   return data;
 }
 
+function mapMessage(raw: any): import('./types').Message {
+  return {
+    id: raw.id,
+    temp_email_id: raw.temp_email_id,
+    from: raw.sender,
+    to: raw.recipient,
+    subject: raw.subject || '',
+    body_text: raw.body_text || '',
+    body_html: raw.body_html,
+    otp: raw.otp,
+    received_at: raw.received_at,
+    size_bytes: raw.size_bytes || 0,
+  };
+}
+
 // ============================================================
 // AUTH API
 // ============================================================
 
 export const authApi = {
   async register(username: string, email: string, password: string) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { username },
-      },
+    return apiCall('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, email, password }),
     });
-
-    if (error) throw error;
-    return data;
   },
 
-  async login(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+  async login(username: string, password: string): Promise<{ token: string }> {
+    const data = await apiCall<{ token: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
     });
-
-    if (error) throw error;
-    return data;
+    return { token: data.token };
   },
 
-  async logout() {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-  },
-
-  async getProfile(): Promise<Profile> {
-    const data = await callEdgeFunction('admin-ops', '/profile');
+  async getProfile(): Promise<import('./types').Profile> {
+    const data = await apiCall<{ profile: import('./types').Profile }>('/auth/me');
     return data.profile;
   },
 
-  async updateLastLogin() {
-    await callEdgeFunction('admin-ops', '/update-last-login', { method: 'POST' });
-  },
-
-  async changePassword(newPassword: string) {
-    await callEdgeFunction('admin-ops', '/change-password', {
+  async changePassword(currentPassword: string, newPassword: string) {
+    return apiCall('/auth/change-password', {
       method: 'POST',
-      body: JSON.stringify({ newPassword }),
+      body: JSON.stringify({ currentPassword, newPassword }),
     });
   },
 };
@@ -78,31 +85,31 @@ export const authApi = {
 // ============================================================
 
 export const emailApi = {
-  async create(emailLocal: string): Promise<{ email: TempEmail; expiresIn: string }> {
-    const data = await callEdgeFunction('email-ops', '/create', {
+  async create(emailLocal: string): Promise<{ email: any; expiresIn: string }> {
+    const data = await apiCall<{ email: any; expiresIn: string }>('/email/create', {
       method: 'POST',
       body: JSON.stringify({ emailLocal }),
     });
     return { email: data.email, expiresIn: data.expiresIn };
   },
 
-  async getInbox(): Promise<InboxEmail[]> {
-    const data = await callEdgeFunction('email-ops', '/inbox');
+  async getInbox(): Promise<import('./types').InboxEmail[]> {
+    const data = await apiCall<{ emails: import('./types').InboxEmail[] }>('/email/inbox');
     return data.emails;
   },
 
-  async getMessages(tempEmailId: string): Promise<Message[]> {
-    const data = await callEdgeFunction('email-ops', `/messages/${tempEmailId}`);
-    return data.messages;
+  async getMessages(tempEmailId: string): Promise<import('./types').Message[]> {
+    const data = await apiCall<{ messages: any[] }>(`/email/${tempEmailId}/messages`);
+    return data.messages.map(mapMessage);
   },
 
-  async getMessage(tempEmailId: string, messageId: string): Promise<Message> {
-    const data = await callEdgeFunction('email-ops', `/message/${tempEmailId}/${messageId}`);
-    return data.message;
+  async getMessage(tempEmailId: string, messageId: string): Promise<import('./types').Message> {
+    const data = await apiCall<{ message: any }>(`/email/${tempEmailId}/message/${messageId}`);
+    return mapMessage(data.message);
   },
 
   async testSend(to: string, subject: string, body: string): Promise<{ otp: string | null }> {
-    const data = await callEdgeFunction('email-ops', '/test-send', {
+    const data = await apiCall<{ otp: string | null }>('/email/test-send', {
       method: 'POST',
       body: JSON.stringify({ to, subject, body }),
     });
@@ -115,65 +122,53 @@ export const emailApi = {
 // ============================================================
 
 export const adminApi = {
-  async getPendingUsers(): Promise<Profile[]> {
-    const data = await callEdgeFunction('admin-ops', '/pending-users');
+  async getPendingUsers(): Promise<import('./types').Profile[]> {
+    const data = await apiCall<{ pendingUsers: import('./types').Profile[] }>('/admin/users/pending');
     return data.pendingUsers;
   },
 
-  async getApprovedUsers(): Promise<Profile[]> {
-    const data = await callEdgeFunction('admin-ops', '/approved-users');
+  async getApprovedUsers(): Promise<import('./types').Profile[]> {
+    const data = await apiCall<{ approvedUsers: import('./types').Profile[] }>('/admin/users/approved');
     return data.approvedUsers;
   },
 
-  async getAllUsers(): Promise<Profile[]> {
-    const data = await callEdgeFunction('admin-ops', '/all-users');
-    return data.users;
-  },
-
-  async approveUser(userId: string, approve: boolean): Promise<Profile> {
-    const data = await callEdgeFunction('admin-ops', '/approve-user', {
+  async approveUser(userId: string, approve: boolean) {
+    return apiCall('/admin/approve-user', {
       method: 'POST',
       body: JSON.stringify({ userId, approve }),
     });
-    return data.user;
   },
 
   async resetPassword(userId: string): Promise<{ tempPassword: string; user: { username: string; email: string } }> {
-    const data = await callEdgeFunction('admin-ops', '/reset-password', {
+    const data = await apiCall<{ tempPassword: string; user: { username: string; email: string } }>('/admin/reset-password', {
       method: 'POST',
       body: JSON.stringify({ userId }),
     });
     return { tempPassword: data.tempPassword, user: data.user };
   },
 
-  async deactivateUser(userId: string): Promise<void> {
-    await callEdgeFunction('admin-ops', '/deactivate-user', {
+  async deactivateUser(userId: string) {
+    return apiCall('/admin/deactivate-user', {
       method: 'POST',
       body: JSON.stringify({ userId }),
     });
   },
 
-  async getStats(): Promise<AdminStats> {
-    const data = await callEdgeFunction('admin-ops', '/stats');
+  async getStats(): Promise<import('./types').AdminStats> {
+    const data = await apiCall<{ stats: import('./types').AdminStats }>('/admin/stats');
     return data.stats;
   },
 
-  async updateConfig(updates: Partial<AppConfig>): Promise<AppConfig> {
-    const data = await callEdgeFunction('admin-ops', '/config', {
+  async updateConfig(updates: Partial<import('./types').AppConfig>): Promise<import('./types').AppConfig> {
+    const data = await apiCall<{ config: import('./types').AppConfig }>('/admin/config/update', {
       method: 'POST',
       body: JSON.stringify(updates),
     });
     return data.config;
   },
 
-  async getConfig(): Promise<AppConfig> {
-    const { data, error } = await supabase
-      .from('app_config')
-      .select('*')
-      .eq('id', 1)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) throw new Error('Configuration not found');
-    return data as AppConfig;
+  async getConfig(): Promise<import('./types').AppConfig> {
+    const data = await apiCall<{ config: import('./types').AppConfig }>('/config');
+    return data.config;
   },
 };

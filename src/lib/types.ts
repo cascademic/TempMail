@@ -62,30 +62,3 @@ export interface AdminStats {
   totalEmails: number;
   totalMessages: number;
 }
-
-export interface Database {
-  public: {
-    Tables: {
-      profiles: {
-        Row: Profile;
-        Insert: Partial<Profile>;
-        Update: Partial<Profile>;
-      };
-      temp_emails: {
-        Row: TempEmail;
-        Insert: Partial<TempEmail>;
-        Update: Partial<TempEmail>;
-      };
-      messages: {
-        Row: Message;
-        Insert: Partial<Message>;
-        Update: Partial<Message>;
-      };
-      app_config: {
-        Row: AppConfig;
-        Insert: Partial<AppConfig>;
-        Update: Partial<AppConfig>;
-      };
-    };
-  };
-}
