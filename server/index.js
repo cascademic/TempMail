@@ -8,6 +8,7 @@ require('dotenv').config();
 const { authMiddleware } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const emailRoutes = require('./routes/email');
+const mailApiRoutes = require('./routes/mailApi');
 const adminRoutes = require('./routes/admin');
 const { startSmtpServer, stopSmtpServer } = require('./smtp');
 const { startCleanupJobs } = require('./cleanup');
@@ -33,6 +34,9 @@ app.get('/api/config', async (req, res) => {
     res.status(500).json({ error: 'Failed to load config' });
   }
 });
+
+// Mail API (credentials in the request body, no token)
+app.use('/api/email', mailApiRoutes);
 
 // Protected routes
 app.use('/api/email', authMiddleware, emailRoutes);

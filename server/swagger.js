@@ -1,16 +1,41 @@
 // OpenAPI spec served at /api-docs
+const errorResponse = (description) => ({
+  description,
+  content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+});
+
+const credentialsBody = {
+  required: true,
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        required: ['username', 'password', 'email'],
+        properties: {
+          username: { type: 'string', example: 'anshul.madan' },
+          password: { type: 'string', example: 'P@ssw0rd' },
+          email: { type: 'string', example: 'test@tempmail.duckdns.org', description: 'Temp email to read' },
+        },
+      },
+    },
+  },
+};
+
+const commonErrors = {
+  400: errorResponse('username, password, or email missing'),
+  401: errorResponse('Invalid credentials'),
+  403: errorResponse('Account pending admin approval'),
+};
+
 module.exports = {
   openapi: '3.0.3',
   info: {
     title: 'TempMail API',
     version: '1.0.0',
-    description: '1. Call `/api/auth/login` and copy the `token`.\n2. Click **Authorize** and paste the token.\n3. Call the email endpoints.',
+    description: 'Send `username`, `password`, and `email` in the JSON body. No token needed.',
   },
   servers: [{ url: '/' }],
   components: {
-    securitySchemes: {
-      bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-    },
     schemas: {
       Error: {
         type: 'object',
@@ -23,7 +48,7 @@ module.exports = {
           temp_email_id: { type: 'string', format: 'uuid' },
           sender: { type: 'string', example: 'no-reply@example.com' },
           recipient: { type: 'string', example: 'test@tempmail.duckdns.org' },
-          subject: { type: 'string', example: 'Your verification code' },
+          subject: { type: 'string', example: 'One Time Password: DP world Trade Finance' },
           body_text: { type: 'string' },
           body_html: { type: 'string', nullable: true },
           otp: { type: 'string', nullable: true, example: '482913' },
@@ -34,64 +59,11 @@ module.exports = {
     },
   },
   paths: {
-    '/api/auth/login': {
-      post: {
-        tags: ['Auth'],
-        summary: 'Login and get a JWT token',
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['username', 'password'],
-                properties: {
-                  username: { type: 'string', example: 'anshul.madan' },
-                  password: { type: 'string', example: 'P@ssw0rd' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: {
-            description: 'Logged in',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    success: { type: 'boolean' },
-                    token: { type: 'string' },
-                    user: {
-                      type: 'object',
-                      properties: {
-                        id: { type: 'string', format: 'uuid' },
-                        username: { type: 'string' },
-                        email: { type: 'string' },
-                        isAdmin: { type: 'boolean' },
-                        isApproved: { type: 'boolean' },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-          400: { description: 'Missing username or password', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
-          401: { description: 'Invalid credentials', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
-          403: { description: 'Account pending admin approval', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
-        },
-      },
-    },
     '/api/email/latest': {
-      get: {
+      post: {
         tags: ['Email'],
-        summary: 'Get the latest message for an email address (includes OTP)',
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          { name: 'email', in: 'query', required: true, schema: { type: 'string' }, example: 'test@tempmail.duckdns.org' },
-        ],
+        summary: 'Get the latest message for an email',
+        requestBody: credentialsBody,
         responses: {
           200: {
             description: 'Latest message',
@@ -107,9 +79,33 @@ module.exports = {
               },
             },
           },
-          400: { description: 'email missing', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
-          401: { description: 'Missing or invalid token', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
-          404: { description: 'No messages for this email yet', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          ...commonErrors,
+          404: errorResponse('No messages for this email yet'),
+        },
+      },
+    },
+    '/api/email/get-otp': {
+      post: {
+        tags: ['Email'],
+        summary: 'Get the 6-digit OTP from the latest "One Time Password: DP world Trade Finance" mail',
+        requestBody: credentialsBody,
+        responses: {
+          200: {
+            description: 'OTP found',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    otp: { type: 'string', example: '482913' },
+                  },
+                },
+              },
+            },
+          },
+          ...commonErrors,
+          404: errorResponse('No messages, latest message is not the OTP mail, or no OTP in it'),
         },
       },
     },

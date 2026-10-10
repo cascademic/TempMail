@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Plus, Mail, Clock, Trash2, RefreshCw, Copy, KeyRound,
+  Plus, Mail, Trash2, RefreshCw, Copy, KeyRound,
   Inbox, Send, ChevronRight, ArrowLeft, AlertCircle,
 } from 'lucide-react';
 import { emailApi, adminApi } from '@/lib/api';
@@ -71,8 +71,8 @@ export default function Dashboard() {
     if (!newEmailLocal) return;
     setCreating(true);
     try {
-      const { email, expiresIn } = await emailApi.create(newEmailLocal);
-      showToast(`Email created: ${email.email} (expires in ${expiresIn})`, 'success');
+      const { email } = await emailApi.create(newEmailLocal);
+      showToast(`Email created: ${email.email}`, 'success');
       setShowCreate(false);
       setNewEmailLocal('');
       await loadInbox();
@@ -148,16 +148,6 @@ export default function Dashboard() {
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
     return d.toLocaleDateString();
-  };
-
-  const formatExpiry = (iso: string) => {
-    const d = new Date(iso);
-    const now = new Date();
-    const diff = d.getTime() - now.getTime();
-    if (diff <= 0) return 'expired';
-    if (diff < 60000) return `${Math.floor(diff / 1000)}s left`;
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m left`;
-    return `${Math.floor(diff / 3600000)}h left`;
   };
 
   if (!profile?.is_approved) {
@@ -262,10 +252,6 @@ export default function Dashboard() {
                       ) : (
                         <div className="text-xs text-slate-400">No messages yet</div>
                       )}
-                      <div className="flex items-center gap-1 mt-1 text-xs text-slate-400">
-                        <Clock className="w-3 h-3" />
-                        {formatExpiry(email.expiresAt)}
-                      </div>
                     </button>
                   ))}
                 </div>
@@ -381,7 +367,7 @@ export default function Dashboard() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-700 truncate">{selectedEmail.email}</p>
                     <p className="text-xs text-slate-400">
-                      {selectedEmail.messageCount} message{selectedEmail.messageCount !== 1 ? 's' : ''} · {formatExpiry(selectedEmail.expiresAt)}
+                      {selectedEmail.messageCount} message{selectedEmail.messageCount !== 1 ? 's' : ''}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

@@ -70,36 +70,6 @@ router.post('/create', async (req, res) => {
   }
 });
 
-// GET /api/email/latest?email=foo@domain
-router.get('/latest', async (req, res) => {
-  try {
-    if (!req.user.is_approved) {
-      return res.status(403).json({ error: 'Your account is pending admin approval' });
-    }
-
-    const email = String(req.query.email || '').trim().toLowerCase();
-    if (!email) {
-      return res.status(400).json({ error: 'email query param is required' });
-    }
-
-    const { rows } = await db.query(
-      `SELECT m.* FROM messages m
-       JOIN temp_emails te ON te.id = m.temp_email_id
-       WHERE te.email = $1
-       ORDER BY m.received_at DESC
-       LIMIT 1`,
-      [email]
-    );
-    if (rows.length === 0) {
-      return res.status(404).json({ error: 'No messages found for this email' });
-    }
-
-    res.json({ success: true, message: rows[0] });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to load latest message' });
-  }
-});
-
 // GET /api/email/inbox
 router.get('/inbox', async (req, res) => {
   try {
