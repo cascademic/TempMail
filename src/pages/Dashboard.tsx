@@ -71,15 +71,15 @@ export default function Dashboard() {
     if (!newEmailLocal) return;
     setCreating(true);
     try {
-      const { email } = await emailApi.create(newEmailLocal);
-      showToast(`Email created: ${email.email}`, 'success');
+      const { email, existing } = await emailApi.create(newEmailLocal);
+      showToast(existing ? `Opened existing email: ${email.email}` : `Email created: ${email.email}`, 'success');
       setShowCreate(false);
       setNewEmailLocal('');
       await loadInbox();
-      setSelectedEmail({
+      await handleSelectEmail({
         id: email.id,
         email: email.email,
-        messageCount: 0,
+        messageCount: email.message_count ?? 0,
         createdAt: email.created_at,
         expiresAt: email.expires_at,
         latestMessage: null,

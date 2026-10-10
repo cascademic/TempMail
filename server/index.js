@@ -12,6 +12,7 @@ const mailApiRoutes = require('./routes/mailApi');
 const adminRoutes = require('./routes/admin');
 const { startSmtpServer, stopSmtpServer } = require('./smtp');
 const { startCleanupJobs } = require('./cleanup');
+const { ensureSchema } = require('./schema');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -50,8 +51,9 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-const httpServer = app.listen(PORT, () => {
+const httpServer = app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
+  await ensureSchema();
   startSmtpServer();
   startCleanupJobs();
 });

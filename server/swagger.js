@@ -12,8 +12,8 @@ const credentialsBody = {
         type: 'object',
         required: ['username', 'password', 'email'],
         properties: {
-          username: { type: 'string', example: 'anshul.madan' },
-          password: { type: 'string', example: 'P@ssw0rd' },
+          username: { type: 'string', example: 'your_username' },
+          password: { type: 'string', example: 'your_password' },
           email: { type: 'string', example: 'test@tempmail.duckdns.org', description: 'Temp email to read' },
         },
       },

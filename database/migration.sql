@@ -40,6 +40,16 @@ CREATE INDEX IF NOT EXISTS idx_temp_emails_owner ON temp_emails(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_temp_emails_expires ON temp_emails(expires_at);
 
 -- ============================================================
+-- USER_TEMP_EMAILS TABLE (which users have opened which temp email)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS user_temp_emails (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  temp_email_id UUID NOT NULL REFERENCES temp_emails(id) ON DELETE CASCADE,
+  added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, temp_email_id)
+);
+
+-- ============================================================
 -- MESSAGES TABLE
 -- ============================================================
 CREATE TABLE IF NOT EXISTS messages (

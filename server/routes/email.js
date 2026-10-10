@@ -33,19 +33,24 @@ router.post('/create', async (req, res) => {
     const config = configRows[0];
     if (!config) return res.status(500).json({ error: 'Config not found' });
 
+    const fullEmail = `${emailLocal.toLowerCase()}@${config.email_domain}`;
+
+    // Address already exists (e.g. mail arrived first, or another user opened it): add it to this user's list
+    const { rows: existing } = await db.query('SELECT * FROM temp_emails WHERE email = $1', [fullEmail]);
+    if (existing.length > 0) {
+      await db.query(
+        'INSERT INTO user_temp_emails (user_id, temp_email_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [req.user.id, existing[0].id]
+      );
+      return res.json({ success: true, existing: true, email: existing[0] });
+    }
+
     const { rows: countRows } = await db.query(
-      'SELECT COUNT(*) as count FROM temp_emails WHERE owner_user_id = $1',
+      'SELECT COUNT(*) as count FROM user_temp_emails WHERE user_id = $1',
       [req.user.id]
     );
     if (parseInt(countRows[0].count) >= config.max_emails_per_user) {
       return res.status(400).json({ error: `Maximum email limit reached (${config.max_emails_per_user})` });
-    }
-
-    const fullEmail = `${emailLocal.toLowerCase()}@${config.email_domain}`;
-
-    const { rows: existing } = await db.query('SELECT id FROM temp_emails WHERE email = $1', [fullEmail]);
-    if (existing.length > 0) {
-      return res.status(409).json({ error: 'This email address already exists' });
     }
 
     const expiresAt = new Date(Date.now() + config.email_ttl_seconds * 1000);
@@ -53,6 +58,10 @@ router.post('/create', async (req, res) => {
       `INSERT INTO temp_emails (email, owner_user_id, expires_at)
        VALUES ($1, $2, $3) RETURNING *`,
       [fullEmail, req.user.id, expiresAt]
+    );
+    await db.query(
+      'INSERT INTO user_temp_emails (user_id, temp_email_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [req.user.id, rows[0].id]
     );
 
     await db.query('UPDATE users SET emails_created = emails_created + 1 WHERE id = $1', [req.user.id]);
@@ -79,8 +88,9 @@ router.get('/inbox', async (req, res) => {
         (SELECT m.sender FROM messages m WHERE m.temp_email_id = te.id ORDER BY m.received_at DESC LIMIT 1) as latest_from,
         (SELECT m.received_at FROM messages m WHERE m.temp_email_id = te.id ORDER BY m.received_at DESC LIMIT 1) as latest_received_at
        FROM temp_emails te
-       WHERE te.owner_user_id = $1
-       ORDER BY te.created_at DESC`,
+       JOIN user_temp_emails ute ON ute.temp_email_id = te.id
+       WHERE ute.user_id = $1
+       ORDER BY ute.added_at DESC`,
       [req.user.id]
     );
 
@@ -105,10 +115,11 @@ router.get('/inbox', async (req, res) => {
 router.get('/:emailId/messages', async (req, res) => {
   try {
     const { emailId } = req.params;
-    const { rows: emailRows } = await db.query(
-      'SELECT * FROM temp_emails WHERE id = $1 AND owner_user_id = $2',
-      [emailId, req.user.id]
-    );
+    // Any approved user can read any temp email
+    if (!req.user.is_approved) {
+      return res.status(403).json({ error: 'Your account is pending admin approval' });
+    }
+    const { rows: emailRows } = await db.query('SELECT * FROM temp_emails WHERE id = $1', [emailId]);
     if (emailRows.length === 0) {
       return res.status(404).json({ error: 'Email not found' });
     }
@@ -128,10 +139,11 @@ router.get('/:emailId/messages', async (req, res) => {
 router.get('/:emailId/message/:messageId', async (req, res) => {
   try {
     const { emailId, messageId } = req.params;
-    const { rows: emailRows } = await db.query(
-      'SELECT * FROM temp_emails WHERE id = $1 AND owner_user_id = $2',
-      [emailId, req.user.id]
-    );
+    // Any approved user can read any temp email
+    if (!req.user.is_approved) {
+      return res.status(403).json({ error: 'Your account is pending admin approval' });
+    }
+    const { rows: emailRows } = await db.query('SELECT * FROM temp_emails WHERE id = $1', [emailId]);
     if (emailRows.length === 0) {
       return res.status(404).json({ error: 'Email not found' });
     }
@@ -162,10 +174,7 @@ router.post('/test-send', async (req, res) => {
       return res.status(400).json({ error: 'to, subject, and body are required' });
     }
 
-    const { rows: emailRows } = await db.query(
-      'SELECT * FROM temp_emails WHERE email = $1 AND owner_user_id = $2',
-      [to.toLowerCase(), req.user.id]
-    );
+    const { rows: emailRows } = await db.query('SELECT * FROM temp_emails WHERE email = $1', [to.toLowerCase()]);
     if (emailRows.length === 0) {
       return res.status(404).json({ error: 'Destination email not found' });
     }

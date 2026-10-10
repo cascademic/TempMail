@@ -85,12 +85,12 @@ export const authApi = {
 // ============================================================
 
 export const emailApi = {
-  async create(emailLocal: string): Promise<{ email: any; expiresIn: string }> {
-    const data = await apiCall<{ email: any; expiresIn: string }>('/email/create', {
+  async create(emailLocal: string): Promise<{ email: any; expiresIn?: string; existing: boolean }> {
+    const data = await apiCall<{ email: any; expiresIn?: string; existing?: boolean }>('/email/create', {
       method: 'POST',
       body: JSON.stringify({ emailLocal }),
     });
-    return { email: data.email, expiresIn: data.expiresIn };
+    return { email: data.email, expiresIn: data.expiresIn, existing: !!data.existing };
   },
 
   async getInbox(): Promise<import('./types').InboxEmail[]> {
