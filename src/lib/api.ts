@@ -98,6 +98,10 @@ export const emailApi = {
     return data.emails;
   },
 
+  async remove(tempEmailId: string): Promise<void> {
+    await apiCall(`/email/${tempEmailId}`, { method: 'DELETE' });
+  },
+
   async getMessages(tempEmailId: string): Promise<import('./types').Message[]> {
     const data = await apiCall<{ messages: any[] }>(`/email/${tempEmailId}/messages`);
     return data.messages.map(mapMessage);

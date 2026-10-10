@@ -105,6 +105,22 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteEmail = async (email: InboxEmail) => {
+    if (!window.confirm(`Remove ${email.email} from your list?`)) return;
+    try {
+      await emailApi.remove(email.id);
+      setInbox((prev) => prev.filter((e) => e.id !== email.id));
+      if (selectedEmail?.id === email.id) {
+        setSelectedEmail(null);
+        setSelectedMessage(null);
+        setMessages([]);
+      }
+      showToast(`Removed ${email.email}`, 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete email', 'error');
+    }
+  };
+
   const handleSelectMessage = async (msg: Message) => {
     setLoadingMessage(true);
     try {
@@ -227,21 +243,37 @@ export default function Dashboard() {
               ) : (
                 <div className="divide-y divide-slate-50">
                   {inbox.map((email, idx) => (
-                    <button
+                    <div
                       key={email.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleSelectEmail(email)}
-                      className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors animate-fade-in ${
+                      onKeyDown={(e) => e.key === 'Enter' && handleSelectEmail(email)}
+                      className={`group w-full text-left px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors animate-fade-in ${
                         selectedEmail?.id === email.id ? 'bg-blue-50 border-l-3 border-blue-500' : ''
                       }`}
                       style={{ animationDelay: `${idx * 50}ms` }}
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span className="text-sm font-medium text-slate-700 truncate">{email.email}</span>
-                        {email.messageCount > 0 && (
-                          <span className="flex-shrink-0 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
-                            {email.messageCount}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {email.messageCount > 0 && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                              {email.messageCount}
+                            </span>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteEmail(email);
+                            }}
+                            title="Delete email"
+                            aria-label={`Delete ${email.email}`}
+                            className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                       {email.latestMessage ? (
                         <div className="text-xs text-slate-500 truncate">
@@ -252,7 +284,7 @@ export default function Dashboard() {
                       ) : (
                         <div className="text-xs text-slate-400">No messages yet</div>
                       )}
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}

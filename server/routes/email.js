@@ -111,6 +111,22 @@ router.get('/inbox', async (req, res) => {
   }
 });
 
+// DELETE /api/email/:emailId  (removes the email from this user's list only)
+router.delete('/:emailId', async (req, res) => {
+  try {
+    const { rowCount } = await db.query(
+      'DELETE FROM user_temp_emails WHERE user_id = $1 AND temp_email_id = $2',
+      [req.user.id, req.params.emailId]
+    );
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'Email not found in your list' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete email' });
+  }
+});
+
 // GET /api/email/:emailId/messages
 router.get('/:emailId/messages', async (req, res) => {
   try {
