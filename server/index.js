@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const emailRoutes = require('./routes/email');
 const adminRoutes = require('./routes/admin');
 const { startSmtpServer, stopSmtpServer } = require('./smtp');
+const { startCleanupJobs } = require('./cleanup');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -48,6 +49,7 @@ if (process.env.NODE_ENV === 'production') {
 const httpServer = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   startSmtpServer();
+  startCleanupJobs();
 });
 
 function gracefulShutdown(signal) {
